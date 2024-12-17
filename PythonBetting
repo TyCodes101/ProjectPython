@@ -1,0 +1,72 @@
+import requests
+import pandas as pd
+import os
+from dotenv import load_dotenv
+
+# Made by Tyler Cox, this is for soccer!!!
+
+# Load environment variables from a .env file (store API key securely)
+load_dotenv()
+
+# Fetch the API key from environment variables
+API_KEY = "1f267f153da4d7c723afc386f6658b05"  # Ensure your .env file has API_KEY=your_actual_key
+
+
+def fetch_odds():
+    # Define the API endpoint and parameters for the request
+    url = "https://api.the-odds-api.com/v4/sports/soccer_epl/odds"
+    params = {
+        "apiKey": API_KEY,
+        "regions": "us,uk,eu",  # Bookmakers regions
+        "markets": "h2h"  # Head-to-head market
+    }
+
+    # Send the request to the API
+    response = requests.get(url, params=params)
+
+    if response.status_code == 200:
+        print("Data fetched successfully!")
+        data = response.json()
+        process_and_save_odds(data)
+    else:
+        print("Error:", response.status_code, response.text)
+
+
+def process_and_save_odds(data):
+    rows = []
+
+    # Loop through each match event in the fetched data
+    for event in data:
+        home_team = event['home_team']
+        away_team = event['away_team']
+        best_home = best_away = best_draw = 0
+
+        # Loop through the bookmakers and their markets
+        for bookmaker in event.get("bookmakers", []):
+            for market in bookmaker.get("markets", []):
+                if market["key"] == "h2h":  # Only process head-to-head odds
+                    for outcome in market["outcomes"]:
+                        if outcome["name"] == home_team:
+                            best_home = max(best_home, outcome["price"])
+                        elif outcome["name"] == away_team:
+                            best_away = max(best_away, outcome["price"])
+                        elif outcome["name"] == "Draw":
+                            best_draw = max(best_draw, outcome["price"])
+
+        # Add match data to the rows list
+        rows.append({
+            "Home Team": home_team,
+            "Away Team": away_team,
+            "Best Home Odds": best_home,
+            "Best Away Odds": best_away,
+            "Best Draw Odds": best_draw
+        })
+
+    # Convert the rows to a DataFrame and save it to CSV
+    df = pd.DataFrame(rows)
+    df.to_csv("odds_data.csv", index=False)
+    print("Odds data saved to odds_data.csv")
+
+
+# Run the program to fetch and process the data
+fetch_odds()
