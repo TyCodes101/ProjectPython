@@ -1,0 +1,66 @@
+import requests
+from datetime import datetime
+
+# Your API Key for The Odds API
+API_KEY = "1f267f153da4d7c723afc386f6658b05"
+
+
+# Function to fetch odds data
+def fetch_odds():
+    url = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
+    params = {
+        "apiKey": API_KEY,
+        "regions": "us,uk,eu",  # Regions to get data from
+        "markets": "h2h"  # Head-to-head betting odds
+    }
+
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        print("Data fetched successfully!")
+        data = response.json()
+        process_odds_data(data)
+    else:
+        print(f"Error: {response.status_code}, {response.text}")
+
+
+# Function to calculate arbitrage opportunities
+def calculate_arbitrage(odds):
+    # For each game, calculate the implied probabilities
+    for game in odds:
+        home_team = game['home_team']
+        away_team = game['away_team']
+
+        best_home_odds = best_away_odds = 0
+
+        for bookmaker in game.get("bookmakers", []):
+            for market in bookmaker.get("markets", []):
+                if market["key"] == "h2h":
+                    for outcome in market["outcomes"]:
+                        if outcome["name"] == home_team:
+                            best_home_odds = max(best_home_odds, outcome["price"])
+                        elif outcome["name"] == away_team:
+                            best_away_odds = max(best_away_odds, outcome["price"])
+
+        # Implied probability calculation
+        if best_home_odds > 0 and best_away_odds > 0:
+            implied_home = 1 / best_home_odds
+            implied_away = 1 / best_away_odds
+            total_implied_probability = implied_home + implied_away
+
+            # Only flag arbitrage opportunities when the total implied probability is strictly less than 1
+            if total_implied_probability < 1:
+                print(f"Arbitrage opportunity detected for {home_team} vs {away_team}")
+                print(f"Best Home Odds: {best_home_odds} | Best Away Odds: {best_away_odds}")
+                print(f"Implied Home Probability: {implied_home:.2f}")
+                print(f"Implied Away Probability: {implied_away:.2f}")
+                print(f"Total Implied Probability: {total_implied_probability:.2f}")
+                print("Arbitrage Opportunity! You can place bets and guarantee a profit.\n")
+
+
+# Function to process the odds data and check for arbitrage
+def process_odds_data(data):
+    calculate_arbitrage(data)
+
+
+# Run the program to fetch and check for arbitrage opportunities
+fetch_odds()
