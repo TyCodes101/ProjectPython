@@ -1,0 +1,105 @@
+import requests
+import pandas as pd
+import tkinter as tk
+from tkinter import ttk
+from dotenv import load_dotenv
+
+# Load environment variables (API key)
+load_dotenv()
+
+API_KEY = "1f267f153da4d7c723afc386f6658b05"  # Replace with your actual API key
+
+
+# Function to fetch betting odds
+def fetch_odds():
+    url = "https://api.the-odds-api.com/v4/sports/soccer_epl/odds"
+    params = {
+        "apiKey": API_KEY,
+        "regions": "us,uk,eu",  # Bookmakers regions
+        "markets": "h2h"  # Head-to-head market
+    }
+
+    response = requests.get(url, params=params)
+
+    if response.status_code == 200:
+        data = response.json()
+        process_odds_data(data)
+    else:
+        print("Error:", response.status_code, response.text)
+
+
+# Process and display the odds data in a Tkinter window
+def process_odds_data(data):
+    rows = []
+
+    # Loop through each match event in the fetched data
+    for event in data:
+        home_team = event['home_team']
+        away_team = event['away_team']
+        best_home = best_away = best_draw = 0
+
+        # Loop through the bookmakers and their markets
+        for bookmaker in event.get("bookmakers", []):
+            for market in bookmaker.get("markets", []):
+                if market["key"] == "h2h":  # Only process head-to-head odds
+                    for outcome in market["outcomes"]:
+                        if outcome["name"] == home_team:
+                            best_home = max(best_home, outcome["price"])
+                        elif outcome["name"] == away_team:
+                            best_away = max(best_away, outcome["price"])
+                        elif outcome["name"] == "Draw":
+                            best_draw = max(best_draw, outcome["price"])
+
+        # Format the odds to 2 decimal places for better readability
+        best_home = round(best_home, 2)
+        best_away = round(best_away, 2)
+        best_draw = round(best_draw, 2)
+
+        # Add match data to rows list
+        rows.append((home_team, away_team, best_home, best_away, best_draw))
+
+    # Update the GUI table with the fetched data
+    update_gui_table(rows)
+
+
+# Update the Tkinter table with odds data
+def update_gui_table(rows):
+    for row in rows:
+        tree.insert("", "end", values=row)
+
+
+# Set up the Tkinter GUI window
+def setup_gui():
+    global tree  # To reference the treeview widget
+
+    # Create a main window
+    root = tk.Tk()
+    root.title("Sports Betting Odds")
+
+    # Create a Treeview widget to display the odds in a tabular format
+    columns = ("Home Team", "Away Team", "Best Home Odds", "Best Away Odds", "Best Draw Odds")
+    tree = ttk.Treeview(root, columns=columns, show="headings")
+
+    # Define headings for the columns
+    for col in columns:
+        tree.heading(col, text=col)
+        tree.column(col, width=150, anchor=tk.CENTER)
+
+    # Create a vertical scrollbar
+    scrollbar = ttk.Scrollbar(root, orient="vertical", command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
+    scrollbar.pack(side="right", fill="y")
+
+    # Pack the Treeview widget
+    tree.pack(expand=True, fill="both")
+
+    # Add a button to fetch the odds data
+    fetch_button = tk.Button(root, text="Fetch Odds", command=fetch_odds)
+    fetch_button.pack(pady=10)
+
+    # Start the Tkinter event loop
+    root.mainloop()
+
+
+# Run the program
+setup_gui()
