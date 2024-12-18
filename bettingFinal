@@ -1,0 +1,114 @@
+import requests
+import tkinter as tk
+from tkinter import scrolledtext, ttk
+
+API_KEY = "1f267f153da4d7c723afc386f6658b05"
+API_URL = 'https://api.the-odds-api.com/v4/sports/{sport}/odds'
+sports = ['basketball_nba', 'americanfootball_nfl', 'soccer']
+
+def fetch_odds(sport):
+    """
+    Fetch odds data for a specific sport from The Odds API.
+    """
+    params = {
+        'apiKey': API_KEY,
+        'regions': 'us,uk,eu',
+        'markets': 'h2h',
+    }
+    response = requests.get(API_URL.format(sport=sport), params=params)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print(f"Failed to fetch odds for {sport}. Response: {response.text}")
+        return []
+
+def calculate_implied_probability(odds):
+    """
+    Calculate implied probability from the odds.
+    """
+    return 1 / odds
+
+def calculate_arbitrage(home_odds, away_odds, total_stake=100):
+    """
+    Calculate stake distribution and guaranteed profit for arbitrage.
+    """
+    home_prob = calculate_implied_probability(home_odds)
+    away_prob = calculate_implied_probability(away_odds)
+    total_prob = home_prob + away_prob
+
+    if total_prob < 1:
+        # Arbitrage stakes
+        stake_home = (total_stake * away_prob) / home_odds
+        stake_away = (total_stake * home_prob) / away_odds
+        profit = total_stake * (1 - total_prob)
+        return round(stake_home, 2), round(stake_away, 2), round(profit, 2)
+    return None, None, None
+
+def detect_arbitrage(odds_data, text_widget, sport):
+    """
+    Detect arbitrage opportunities and log them in the GUI.
+    """
+    has_arbitrage = False
+    for event in odds_data:
+        home_team = event['home_team']
+        away_team = event['away_team']
+        home_odds = away_odds = None
+
+        for bookmaker in event['bookmakers']:
+            for market in bookmaker['markets']:
+                if market['key'] == 'h2h':
+                    for outcome in market['outcomes']:
+                        if outcome['name'] == home_team:
+                            home_odds = outcome['price']
+                        elif outcome['name'] == away_team:
+                            away_odds = outcome['price']
+
+        if home_odds and away_odds:
+            stake_home, stake_away, profit = calculate_arbitrage(home_odds, away_odds)
+
+            if profit is not None:
+                has_arbitrage = True
+                text_widget.insert(tk.END, f"Arbitrage opportunity detected for {home_team} vs {away_team} ({sport}):\n")
+                text_widget.insert(tk.END, f"  Home Odds: {home_odds} | Away Odds: {away_odds}\n")
+                text_widget.insert(tk.END, f"  Stake on Home: ${stake_home} | Stake on Away: ${stake_away}\n")
+                text_widget.insert(tk.END, f"  Guaranteed Profit: ${profit}\n\n")
+
+    if not has_arbitrage:
+        text_widget.insert(tk.END, f"No Arbitrage opportunities for {sport}.\n\n")
+
+def fetch_and_detect_arbitrage():
+    """
+    Fetch odds and detect arbitrage for all sports.
+    """
+    text_widget.delete(1.0, tk.END)
+    for sport in sports:
+        text_widget.insert(tk.END, f"Fetching odds for {sport}...\n")
+        odds_data = fetch_odds(sport)
+        if odds_data:
+            text_widget.insert(tk.END, f"Successfully fetched data for {sport}.\n")
+            detect_arbitrage(odds_data, text_widget, sport)
+        else:
+            text_widget.insert(tk.END, f"Failed to fetch data for {sport}.\n")
+
+# GUI Setup
+root = tk.Tk()
+root.title("Arbitrage Betting Detector")
+root.geometry("800x600")
+
+label = tk.Label(root, text="Arbitrage Betting Opportunities", font=("Arial", 16))
+label.pack(pady=10)
+
+frame = tk.Frame(root)
+frame.pack(pady=5)
+
+scrollbar = ttk.Scrollbar(frame)
+scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+text_widget = scrolledtext.ScrolledText(frame, wrap=tk.WORD, width=80, height=25, yscrollcommand=scrollbar.set)
+text_widget.pack()
+scrollbar.config(command=text_widget.yview)
+
+button = tk.Button(root, text="Fetch Odds and Detect Arbitrage", font=("Arial", 14), command=fetch_and_detect_arbitrage)
+button.pack(pady=10)
+
+root.mainloop()
